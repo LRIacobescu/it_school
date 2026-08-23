@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ document.original_filename }} - PDF Data Explorer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" href="/">PDF Data Explorer</a>
+    <div class="document-title">
+        <strong>{{ document.original_filename }}</strong>
+        <span>{{ document.row_count }} randuri</span>
+    </div>
+    <a class="secondary-button" href="/">Alt PDF</a>
+</header>
+
+<main class="workspace">
+    <section class="filter-card">
+        <div class="filter-head">
+            <div>
+                <div class="eyebrow">FILTRE DINAMICE</div>
+                <h1>Filtreaza datele extrase</h1>
+                <p>Filtrele de mai jos au fost create automat din coloanele PDF-ului.</p>
+            </div>
+        </div>
+
+        <div class="filter-actions utility-row">
+            <button id="apply-filters" class="primary-button" type="button">Aplica filtre</button>
+            <button id="reset-filters" class="secondary-button" type="button">Reseteaza</button>
+        </div>
+
+        <div class="global-search-wrap">
+            <input id="global-search" class="global-search" type="search" placeholder="Cauta in toate coloanele...">
+        </div>
+
+        <div id="filter-tabs" class="filter-tabs"></div>
+        <div id="filter-panels" class="filter-panels"></div>
+    </section>
+
+    <section class="results-card">
+        <div class="results-head">
+            <div>
+                <div class="eyebrow">REZULTATE</div>
+                <h2><span id="result-count">0</span> randuri</h2>
+            </div>
+        </div>
+
+        <div class="results-tools utility-row">
+            <button id="export-pdf" class="secondary-button" type="button" disabled>Export PDF</button>
+            <label class="page-size-control">
+                Randuri / pagina
+                <select id="page-size">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="table-wrap">
+            <table id="result-table">
+                <thead><tr id="table-head"></tr></thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+
+        <div class="pagination">
+            <div class="pagination-main">
+                <button id="first-page" class="secondary-button pagination-nav" type="button">« Prima</button>
+                <button id="prev-page" class="secondary-button pagination-nav" type="button">← Inapoi</button>
+                <div id="page-numbers" class="page-numbers" aria-label="Pagini"></div>
+                <button id="next-page" class="secondary-button pagination-nav" type="button">Inainte →</button>
+                <button id="last-page" class="secondary-button pagination-nav" type="button">Ultima »</button>
+            </div>
+
+            <div class="page-jump">
+                <label for="page-select">Mergi la pagina</label>
+                <select id="page-select" aria-label="Alege pagina"></select>
+                <span id="page-info">din 1</span>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script>
+const documentId = {{ document.id }};
+const metadata = {{ metadata | tojson }};
+let currentPage = 1;
+let totalPages = 1;
+let activeFilterPayload = {filters: {}, search: ""};
+let currentSort = { column: null, direction: 'asc' };
+
+function toggleSort(column) {
+        if (currentSort.column === column) {
+            currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort.column = column;
+            currentSort.direction = 'asc';
+        }
+        loadRows(1);
+    }
+
+function safeId(value) {
+    return 'filter-' + btoa(unescape(encodeURIComponent(value))).replace(/[^a-zA-Z0-9]/g, '');
+}
+
+function formatNumber(value) {
+    if (value === null || value === undefined || value === '') return '';
+    return value;
+}
+
+function createTextFilter(column) {
+    const panel = document.createElement('div');
+    panel.className = 'filter-panel';
+    panel.dataset.column = column.name;
+    panel.id = safeId(column.name);
+
+    panel.innerHTML = `
+        <div class="text-filter-toolbar">
+            <input type="search" class="option-search" placeholder="Cauta in ${column.name}...">
+            <button type="button" class="link-button clear-options">Sterge selectia</button>
+        </div>
+        <div class="option-list"></div>
+    `;
+
+    const list = panel.querySelector('.option-list');
+    column.values.forEach((value, index) => {
+        const label = document.createElement('label');
+        label.className = 'check-option';
+        label.dataset.search = String(value).toLowerCase();
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = value;
+        checkbox.dataset.filterColumn = column.name;
+        const text = document.createElement('span');
+        text.textContent = value;
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        list.appendChild(label);
+    });
+
+    panel.querySelector('.option-search').addEventListener('input', (event) => {
+        const query = event.target.value.toLowerCase().trim();
+        panel.querySelectorAll('.check-option').forEach((option) => {
+            option.classList.toggle('hidden-option', query && !option.dataset.search.includes(query));
+        });
+    });
+
+    panel.querySelector('.clear-options').addEventListener('click', () => {
+        panel.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => checkbox.checked = false);
+    });
+
+    return panel;
+}
+
+function createRangeFilter(column) {
+    const panel = document.createElement('div');
+    panel.className = 'filter-panel';
+    panel.dataset.column = column.name;
+    panel.id = safeId(column.name);
+    panel.innerHTML = `
+        <div class="range-filter">
+            <label>
+                Minim
+                <input class="range-min" type="number" step="any" placeholder="${column.min ?? ''}">
+            </label>
+            <span class="range-separator">—</span>
+            <label>
+                Maxim
+                <input class="range-max" type="number" step="any" placeholder="${column.max ?? ''}">
+            </label>
+            <div class="range-hint">Interval detectat: ${column.min ?? '-'} → ${column.max ?? '-'}</div>
+        </div>
+    `;
+    return panel;
+}
+
+function buildFilters() {
+    const tabs = document.getElementById('filter-tabs');
+    const panels = document.getElementById('filter-panels');
+
+    metadata.forEach((column, index) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = 'filter-tab' + (index === 0 ? ' active' : '');
+        tab.textContent = column.name;
+        tab.dataset.target = safeId(column.name);
+
+        const panel = column.type === 'text' ? createTextFilter(column) : createRangeFilter(column);
+        if (index === 0) panel.classList.add('active');
+
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.filter-tab').forEach(item => item.classList.remove('active'));
+            document.querySelectorAll('.filter-panel').forEach(item => item.classList.remove('active'));
+            tab.classList.add('active');
+            panel.classList.add('active');
+        });
+
+        tabs.appendChild(tab);
+        panels.appendChild(panel);
+    });
+}
+
+function collectFilters() {
+    const filters = {};
+
+    metadata.forEach(column => {
+        const panel = document.getElementById(safeId(column.name));
+        if (column.type === 'text') {
+            const values = Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
+            if (values.length) filters[column.name] = {values};
+        } else {
+            const min = panel.querySelector('.range-min').value;
+            const max = panel.querySelector('.range-max').value;
+            if (min !== '' || max !== '') filters[column.name] = {min: min || null, max: max || null};
+        }
+    });
+
+    return filters;
+}
+
+function renderTable(rows) {
+    const head = document.getElementById('table-head');
+    const body = document.getElementById('table-body');
+    head.innerHTML = '';
+    body.innerHTML = '';
+
+    metadata.forEach(column => {
+    const th = document.createElement('th');
+    th.textContent = column.name;
+
+    th.classList.add('sortable-header');
+    th.addEventListener('click', () => toggleSort(column.name));
+
+    if (currentSort.column === column.name) {
+        th.textContent += currentSort.direction === 'asc' ? ' ▲' : ' ▼';
+    }
+
+    head.appendChild(th);
+});
+
+
+    if (!rows.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = metadata.length;
+        td.className = 'empty-state';
+        td.textContent = 'Niciun rand nu corespunde filtrelor selectate.';
+        tr.appendChild(td);
+        body.appendChild(tr);
+        return;
+    }
+
+    rows.forEach(row => {
+        const tr = document.createElement('tr');
+        metadata.forEach(column => {
+            const td = document.createElement('td');
+            td.textContent = formatNumber(row[column.name]);
+            tr.appendChild(td);
+        });
+        body.appendChild(tr);
+    });
+}
+
+function buildPageNumbers() {
+    const container = document.getElementById('page-numbers');
+    container.innerHTML = '';
+
+    if (totalPages <= 1) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'page-number active';
+        button.textContent = '1';
+        button.disabled = true;
+        container.appendChild(button);
+        return;
+    }
+
+    // Afisam suficiente pagini ca utilizatorul sa poata naviga rapid,
+    // fara sa incarcam zona de paginare cu zeci de butoane.
+    const pages = new Set([1, totalPages]);
+    for (let page = currentPage - 2; page <= currentPage + 2; page++) {
+        if (page >= 1 && page <= totalPages) pages.add(page);
+    }
+
+    const sortedPages = Array.from(pages).sort((a, b) => a - b);
+    let previousPage = null;
+
+    sortedPages.forEach(page => {
+        if (previousPage !== null && page - previousPage > 1) {
+            const dots = document.createElement('span');
+            dots.className = 'page-ellipsis';
+            dots.textContent = '…';
+            container.appendChild(dots);
+        }
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'page-number' + (page === currentPage ? ' active' : '');
+        button.textContent = page;
+        button.disabled = page === currentPage;
+        button.addEventListener('click', () => loadRows(page));
+        container.appendChild(button);
+        previousPage = page;
+    });
+}
+
+function updatePageSelector() {
+    const select = document.getElementById('page-select');
+    const oldValue = Number(select.value);
+    select.innerHTML = '';
+
+    for (let page = 1; page <= totalPages; page++) {
+        const option = document.createElement('option');
+        option.value = page;
+        option.textContent = page;
+        select.appendChild(option);
+    }
+
+    select.value = String(currentPage || oldValue || 1);
+    document.getElementById('page-info').textContent = `din ${totalPages}`;
+}
+
+function updatePagination() {
+    document.getElementById('first-page').disabled = currentPage <= 1;
+    document.getElementById('prev-page').disabled = currentPage <= 1;
+    document.getElementById('next-page').disabled = currentPage >= totalPages;
+    document.getElementById('last-page').disabled = currentPage >= totalPages;
+    buildPageNumbers();
+    updatePageSelector();
+}
+
+async function loadRows(page = 1) {
+    const button = document.getElementById('apply-filters');
+    const exportButton = document.getElementById('export-pdf');
+    const filterPayload = {
+        filters: collectFilters(),
+        search: document.getElementById('global-search').value
+    };
+
+    button.disabled = true;
+    exportButton.disabled = true;
+    button.textContent = 'Se filtreaza...';
+
+    try {
+        const response = await fetch(`/api/documents/${documentId}/filter`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                ...filterPayload,
+                page: page,
+                page_size: document.getElementById('page-size').value,
+                sort_by: currentSort.column,
+                sort_dir: currentSort.direction
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Eroare la filtrare');
+
+        activeFilterPayload = filterPayload;
+        currentPage = data.page;
+        totalPages = data.total_pages;
+        document.getElementById('result-count').textContent = data.total;
+        updatePagination();
+        renderTable(data.rows);
+    } catch (error) {
+        alert(error.message);
+    } finally {
+        button.disabled = false;
+        exportButton.disabled = false;
+        button.textContent = 'Aplica filtre';
+    }
+}
+
+async function exportPdf() {
+    const button = document.getElementById('export-pdf');
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Se genereaza PDF...';
+
+    try {
+        const response = await fetch(`/api/documents/${documentId}/export/pdf`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(activeFilterPayload)
+        });
+
+        if (!response.ok) {
+            let message = 'Eroare la exportul PDF';
+            try {
+                const data = await response.json();
+                message = data.detail || message;
+            } catch (_) {}
+            throw new Error(message);
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = match ? match[1] : 'date_filtrate.pdf';
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        alert(error.message);
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+function resetFilters() {
+    document.querySelectorAll('.filter-panel input[type="checkbox"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.range-min, .range-max, .option-search').forEach(input => input.value = '');
+    document.querySelectorAll('.hidden-option').forEach(option => option.classList.remove('hidden-option'));
+    document.getElementById('global-search').value = '';
+    currentPage = 1;
+    loadRows(1);
+}
+
+document.getElementById('apply-filters').addEventListener('click', () => loadRows(1));
+document.getElementById('export-pdf').addEventListener('click', exportPdf);
+document.getElementById('reset-filters').addEventListener('click', resetFilters);
+document.getElementById('first-page').addEventListener('click', () => loadRows(1));
+document.getElementById('prev-page').addEventListener('click', () => loadRows(currentPage - 1));
+document.getElementById('next-page').addEventListener('click', () => loadRows(currentPage + 1));
+document.getElementById('last-page').addEventListener('click', () => loadRows(totalPages));
+document.getElementById('page-select').addEventListener('change', event => loadRows(Number(event.target.value)));
+document.getElementById('page-size').addEventListener('change', () => loadRows(1));
+document.getElementById('global-search').addEventListener('keydown', event => {
+    if (event.key === 'Enter') loadRows(1);
+});
+
+buildFilters();
+loadRows(1);
+</script>
+</body>
+</html>

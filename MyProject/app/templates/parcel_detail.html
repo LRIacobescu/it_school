@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>Detalii Parcel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+            background: #f7f7f7;
+        }
+        h1, h2 {
+            margin-bottom: 10px;
+        }
+        .container {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            max-width: 800px;
+        }
+        .section {
+            margin-bottom: 25px;
+        }
+        .label {
+            font-weight: bold;
+            color: #333;
+        }
+        .value {
+            margin-left: 5px;
+            color: #555;
+        }
+        a {
+            text-decoration: none;
+            color: #0066cc;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<a href="/ui/">← Înapoi la listă</a>
+
+<div class="container">
+
+    <h1>Parcel {{ parcel.parcel_id }}</h1>
+
+    <div class="section">
+        <h2>Owner</h2>
+        <p><span class="label">Nume:</span><span class="value">{{ parcel.owner_name }}</span></p>
+        <p><span class="label">Stradă:</span><span class="value">{{ parcel.owner_street }}</span></p>
+        <p><span class="label">Oraș:</span><span class="value">{{ parcel.city }}</span></p>
+        <p><span class="label">Stat:</span><span class="value">{{ parcel.state }}</span></p>
+    </div>
+
+    <div class="section">
+        <h2>Adresă Proprietate</h2>
+        <p><span class="label">Address 1:</span><span class="value">{{ parcel.prop_address_1 }}</span></p>
+        <p><span class="label">Address 2:</span><span class="value">{{ parcel.prop_address_2 }}</span></p>
+    </div>
+
+    <div class="section">
+        <h2>Detalii Tehnice</h2>
+        <p><span class="label">Section:</span><span class="value">{{ parcel.section }}</span></p>
+        <p><span class="label">Acres (property):</span><span class="value">{{ parcel.prop_acres }}</span></p>
+        <p><span class="label">Class:</span><span class="value">{{ parcel.class_value }}</span></p>
+        <p><span class="label">Acres (total):</span><span class="value">{{ parcel.acres }}</span></p>
+    </div>
+
+    <div class="section">
+        <h2>Districts</h2>
+        <p><span class="label">District 1:</span><span class="value">{{ parcel.district_1 }}</span></p>
+        <p><span class="label">District 2:</span><span class="value">{{ parcel.district_2 }}</span></p>
+        <p><span class="label">District 3:</span><span class="value">{{ parcel.district_3 }}</span></p>
+    </div>
+
+    <div class="section">
+        <h2>Valori</h2>
+        <p><span class="label">Land:</span><span class="value">{{ parcel.land }}</span></p>
+        <p><span class="label">Improvements:</span><span class="value">{{ parcel.impts }}</span></p>
+        <p><span class="label">Total:</span><span class="value">{{ parcel.total }}</span></p>
+    </div>
+
+</div>
+
+</body>
+</html>

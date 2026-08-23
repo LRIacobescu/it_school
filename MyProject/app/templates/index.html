@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>Lista Parcele</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+            background: #f7f7f7;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        .parcel-list {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .parcel-item {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        .parcel-item:last-child {
+            border-bottom: none;
+        }
+        a {
+            text-decoration: none;
+            color: #0066cc;
+            font-weight: bold;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .owner {
+            color: #444;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Lista Parcele</h1>
+
+<div class="parcel-list">
+    {% for parcel in parcels %}
+        <div class="parcel-item">
+            <a href="/ui/parcel/{{ parcel.id }}">
+                {{ parcel.parcel_id }}
+            </a>
+            <div class="owner">
+                {{ parcel.owner_name }} — {{ parcel.city }}, {{ parcel.state }}
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>

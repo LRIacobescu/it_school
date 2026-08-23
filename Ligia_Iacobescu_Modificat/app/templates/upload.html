@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Data Explorer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="upload-page">
+<main class="upload-shell">
+    <section class="hero-card">
+        <div class="eyebrow">PDF DATA EXPLORER</div>
+        <h1>Incarca un PDF si filtreaza datele</h1>
+        {% if error %}
+        <div class="alert error">{{ error }}</div>
+        {% endif %}
+
+        <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data" class="upload-box">
+            <label class="drop-zone" for="pdf-file">
+                <div class="upload-icon">PDF</div>
+                <strong>Alege fisierul PDF</strong>
+                <span id="file-name">sau trage-l aici din calculator</span>
+                <input id="pdf-file" type="file" name="file" accept="application/pdf,.pdf" required>
+            </label>
+            <button type="submit" class="primary-button">Proceseaza PDF</button>
+        </form>
+
+        <div id="processing" class="processing hidden">
+            <div class="spinner"></div>
+            <div>
+                <strong>Procesez PDF-ul...</strong>
+                <p>La documentele cu multe pagini, detectarea tabelelor poate dura putin.</p>
+            </div>
+        </div>
+    </section>
+
+    {% if documents %}
+    <section class="recent-card">
+        <div class="section-heading">
+            <div>
+                <div class="eyebrow">ISTORIC LOCAL</div>
+                <h2>Documente procesate</h2>
+            </div>
+        </div>
+        <div class="recent-list">
+            {% for document in documents %}
+            <a class="recent-item" href="/documents/{{ document.id }}">
+                <div>
+                    <strong>{{ document.original_filename }}</strong>
+                    <span>{{ document.row_count }} randuri detectate</span>
+                </div>
+                <span class="arrow">→</span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</main>
+
+<script>
+const input = document.getElementById('pdf-file');
+const fileName = document.getElementById('file-name');
+const form = document.getElementById('upload-form');
+const processing = document.getElementById('processing');
+
+input.addEventListener('change', () => {
+    fileName.textContent = input.files.length ? input.files[0].name : 'sau trage-l aici din calculator';
+});
+
+form.addEventListener('submit', () => {
+    processing.classList.remove('hidden');
+    form.querySelector('button').disabled = true;
+});
+</script>
+</body>
+</html>
